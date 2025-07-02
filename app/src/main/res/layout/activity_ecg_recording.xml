@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:gravity="center"
+    tools:context=".EcgRecordingActivity">
+
+    <TextView
+        android:id="@+id/recording_status_textview"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Siap Merekam ECG"
+        android:textSize="18sp"
+        android:layout_marginBottom="20dp"/>
+
+    <ProgressBar
+        android:id="@+id/recording_progressbar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="30"
+        android:progress="0"
+        android:visibility="gone"
+        android:layout_marginBottom="20dp"/>
+
+    <Button
+        android:id="@+id/start_record_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/mulai_rekam_ecg_30_detik"/>
+
+    <Button
+        android:id="@+id/stop_record_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/hentikan_rekaman"
+        android:visibility="gone"
+        android:layout_marginTop="10dp"
+        android:backgroundTint="@android:color/holo_red_dark"/>
+
+    <TextView
+        android:id="@+id/file_saved_textview"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:textSize="14sp"
+        tools:text="File disimpan di: /path/to/file.txt"/>
+
+</LinearLayout>

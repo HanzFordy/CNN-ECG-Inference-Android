@@ -1,0 +1,97 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.polar.androidblesdk.MainActivity">
+
+    <LinearLayout
+        android:id="@+id/buttons_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@color/backgroundColor"
+        android:padding="16dp">
+
+        <!-- Listen Broadcast -->
+        <Button
+            android:id="@+id/broadcast_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/listen_broadcast" />
+
+        <TextView
+            android:id="@+id/connection_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Disconnected"
+            android:textColor="@color/primaryColor"
+            android:textSize="18sp"
+            android:padding="8dp"
+            android:gravity="center" />
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="8dp"
+            android:background="@color/primaryColor" />
+
+        <!-- Connect to device -->
+        <Button
+            android:id="@+id/connect_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/connect_to_device" />
+
+        <!-- Auto Connect -->
+        <Button
+            android:id="@+id/auto_connect_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/auto_connect_toggle" />
+
+        <!-- Scan Devices -->
+        <Button
+            android:id="@+id/scan_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/scan_devices" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="8dp"
+            android:background="@color/primaryColor" />
+
+        <!-- HR Data Display -->
+        <TextView
+            android:id="@+id/hr_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="HR: - BPM, RR: - ms"
+            android:textColor="@color/primaryColor"
+            android:textSize="18sp"
+            android:padding="8dp"
+            android:gravity="center" />
+
+        <!-- HR Stream -->
+        <Button
+            android:id="@+id/hr_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/start_hr_stream" />
+
+        <!-- ECG Stream -->
+        <Button
+            android:id="@+id/ecg_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/start_ecg_stream" />
+
+        <!-- ECG Record -->
+        <Button
+            android:id="@+id/ecgrecord_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/start_ecg_record" />
+
+    </LinearLayout>
+</ScrollView>

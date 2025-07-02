@@ -1,0 +1,60 @@
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    tools:context=".EcgGraphActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Grafik ECG (Mentah dan Filtered)"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:layout_marginBottom="4dp" />
+
+        <com.github.mikephil.charting.charts.LineChart
+            android:id="@+id/ecg_chart"
+            android:layout_width="match_parent"
+            android:layout_height="245dp" />
+
+        <TextView
+            android:id="@+id/ecg_data_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tegangan ECG: ..."
+            android:layout_gravity="center_horizontal"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp" />
+
+        <Button
+            android:id="@+id/show_batch_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Show Batch Data"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Grafik Proses Morfologi"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="4dp" />
+
+        <com.github.mikephil.charting.charts.LineChart
+            android:id="@+id/morphology_chart"
+            android:layout_width="match_parent"
+            android:layout_height="245dp" />
+
+
+
+    </LinearLayout>
+</ScrollView>

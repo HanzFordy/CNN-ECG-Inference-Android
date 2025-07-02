@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#52bc7c">
+
+    <ImageView
+        android:id="@+id/logo"
+        android:layout_width="150dp"
+        android:layout_height="150dp"
+        android:src="@mipmap/ic_launcher_no_square"
+        app:layout_constraintBottom_toTopOf="@+id/text_from"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <TextView
+        android:id="@+id/text_from"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="by"
+        android:textColor="@color/primaryColor"
+        android:textSize="14sp"
+        app:layout_constraintBottom_toTopOf="@+id/text_company"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/text_company"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hanif F. Tanjung"
+        android:textColor="@color/primaryColor"
+        android:textSize="18sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="40dp"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
