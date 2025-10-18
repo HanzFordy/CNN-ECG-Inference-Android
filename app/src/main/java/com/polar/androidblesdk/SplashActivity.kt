@@ -15,7 +15,7 @@ class SplashActivity : AppCompatActivity() {
         Handler(Looper.getMainLooper()).postDelayed({
             startActivity(Intent(this, MainActivity::class.java))
             finish() // Tutup SplashActivity agar tidak bisa balik ke sini
-        }, 4000) // 3000 ms = 3 detik
+        }, 2000) // 3000 ms = 3 detik
     }
 }
 
