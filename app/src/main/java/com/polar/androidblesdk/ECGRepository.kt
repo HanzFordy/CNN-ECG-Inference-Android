@@ -15,6 +15,6 @@ object ECGRepository {
                 api.startEcgStreaming(deviceId, settings.maxSettings())
             }
             .subscribeOn(Schedulers.io()) // Pastikan stream berjalan di background thread
-            .asFlow() // <-- INI KEAJAIBANNYA: Mengubah RxJava Flowable menjadi Kotlin Flow
+            .asFlow() // Mengubah RxJava Flowable menjadi Kotlin Flow
     }
 }
