@@ -32,7 +32,7 @@ android {
         pickFirst 'org/apache/maven/surefire/shade/org/apache/maven/shared/utils/annotations.xml'
         pickFirst 'META-INF/DEPENDENCIES'
         pickFirst 'META-INF/LICENSE.md'
-            pickFirst 'META-INF/LICENSE-notice.md'
+        pickFirst 'META-INF/LICENSE-notice.md'
     }
 
 }
