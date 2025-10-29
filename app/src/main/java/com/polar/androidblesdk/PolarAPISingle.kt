@@ -4,7 +4,7 @@ import android.content.Context
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiDefaultImpl
 
-object PolarApiSingleton {
+object PolarAPISingle {
     private var apiInstance: PolarBleApi? = null
 
     fun getApi(context: Context): PolarBleApi {
