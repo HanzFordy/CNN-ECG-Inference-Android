@@ -12,12 +12,14 @@ import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.graphics.drawable.DrawableCompat
+import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiDefaultImpl
 import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.errors.PolarInvalidArgument
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarEcgData
+import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarHrData
 import com.polar.sdk.api.model.PolarSensorSetting
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
@@ -36,7 +38,7 @@ class MainActivity : AppCompatActivity() {
     private var isAutoConnecting = false
 
     private val api: PolarBleApi by lazy {
-        PolarApiSingleton.getApi(this)
+        PolarAPISingle.getApi(this)
     }
 
     private var hrDisposable: Disposable? = null
@@ -50,7 +52,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var hrTextView: TextView
     private lateinit var openGraphButton: Button
     private val hrValues = mutableListOf<Int>()
-    private val ecgFilter = EcgBandpassFilter()
+    private val ecgFilter = ECGBandpassFilter()
     private var isEcgStreaming = false
     private var ecgSampleRate: Int = 0
     private lateinit var openRecordPageButton: Button
@@ -103,6 +105,19 @@ class MainActivity : AppCompatActivity() {
                 connectButton.text = "Not connected to any device"
                 connectButton.isEnabled = false
                 connectionStatusTextView.text = "Disconnected"
+            }
+
+            override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
+                Log.d(TAG, "DIS INFO RECEIVED: $identifier $disInfo")
+            }
+
+            override fun htsNotificationReceived(
+                identifier: String,
+                data: PolarHealthThermometerData
+            ) {
+                // Berdasarkan dokumentasi yang Anda temukan, properti yang benar adalah 'celsius'.
+                // Kotlin akan secara otomatis memanggil metode getCelsius() di belakang layar.
+                Log.d(TAG, "Health Thermometer from $identifier: Temp=${data.celsius} C")
             }
         })
 
