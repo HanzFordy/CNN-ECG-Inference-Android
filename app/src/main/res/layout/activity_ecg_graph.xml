@@ -28,10 +28,12 @@
             android:id="@+id/ecg_data_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Tegangan ECG: ..."
+            android:text="Menerima data..."
             android:layout_gravity="center_horizontal"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp" />
+            android:paddingTop="16dp"
+            android:paddingBottom="16dp"
+            android:textColor="@android:color/white"
+            android:textSize="20sp" />
 
         <Button
             android:id="@+id/show_batch_button"
@@ -39,7 +41,8 @@
             android:layout_height="wrap_content"
             android:text="Show Batch Data"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="16dp" />
+            android:layout_marginTop="16dp"
+            android:visibility="gone"  />
 
         <TextView
             android:layout_width="wrap_content"
@@ -47,14 +50,15 @@
             android:text="Grafik Proses Morfologi"
             android:textAppearance="?android:attr/textAppearanceMedium"
             android:layout_marginTop="16dp"
-            android:layout_marginBottom="4dp" />
+            android:layout_marginBottom="4dp"
+            android:textColor="@android:color/white"
+            android:visibility="gone" />
 
         <com.github.mikephil.charting.charts.LineChart
             android:id="@+id/morphology_chart"
             android:layout_width="match_parent"
-            android:layout_height="245dp" />
-
-
+            android:layout_height="245dp"
+            android:visibility="gone" />
 
     </LinearLayout>
 </ScrollView>
