@@ -10,7 +10,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 
-class EcgClassifierTFLite(context: Context, modelFileName: String = "morphology_cnn_final.tflite") {
+class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_cnn_final.tflite") {
 
     private var interpreter: Interpreter? = null
     private var isInitialized = false
