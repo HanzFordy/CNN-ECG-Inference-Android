@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.XAxis
+import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
@@ -21,7 +22,7 @@ import kotlinx.coroutines.launch
 class EcgGraphActivity : AppCompatActivity() {
 
     // Inisialisasi ViewModel dengan cara yang benar
-    private val viewModel: EcgViewModel by viewModels()
+    private val viewModel: ECGViewModel by viewModels()
 
     // Variabel yang dibutuhkan oleh UI (View)
     private lateinit var ecgDataText: TextView
@@ -82,31 +83,55 @@ class EcgGraphActivity : AppCompatActivity() {
         ecgChart = findViewById(R.id.ecg_chart)
         morphologyChart = findViewById(R.id.morphology_chart)
         ecgDataText = findViewById(R.id.ecg_data_text)
+
         setupCharts() // Panggil fungsi untuk setup grafik
 
-        // --- 2. DAPATKAN DATA YANG DIBUTUHKAN ---
         deviceId = intent.getStringExtra("DEVICE_ID")
         if (deviceId == null) {
             Toast.makeText(this, "Device ID tidak ditemukan!", Toast.LENGTH_LONG).show()
             finish()
             return
         }
-        api = PolarApiSingleton.getApi(this)
+        api = PolarAPISingle.getApi(this)
 
         // --- 3. SURUH VIEWMODEL BEKERJA ---
+        Log.d("ECG_FLOW_DEBUG", "ACTIVITY: Memerintahkan ViewModel untuk memulai.")
         viewModel.startStreaming(api, deviceId!!)
 
-        // --- 4. AMATI PERUBAHAN DARI VIEWMODEL DAN UPDATE UI ---
         lifecycleScope.launch {
+            Log.d("ECG_FLOW_DEBUG", "ACTIVITY: Mulai 'mendengarkan' ViewModel.")
             viewModel.uiState.collect { state ->
+                Log.d("ECG_FLOW_DEBUG", "ACTIVITY: Menerima state baru -> $state")
                 when (state) {
                     is ECGUIState.Idle -> {
                         ecgDataText.text = "Menunggu..."
                     }
                     is ECGUIState.Streaming -> {
                         ecgDataText.text = state.message
+
+                        // --- LOGIKA BARU UNTUK MENGGAMBAR GRAFIK ---
+                        state.ecgDataPoints?.let { dataPoints ->
+                            // Cek dulu apakah data dan dataset sudah ada
+                            if (ecgChart.data != null && ecgChart.data.dataSetCount > 0) {
+                                // Ambil dataset dengan aman
+                                val dataSet = ecgChart.data.getDataSetByIndex(0) as LineDataSet
+
+                                // Ganti data di dataset dengan yang baru
+                                dataSet.values = dataPoints
+
+                                // Beri tahu chart bahwa data telah berubah
+                                ecgChart.data.notifyDataChanged()
+                                ecgChart.notifyDataSetChanged()
+
+                                // Atur view port dan pindahkan ke data terbaru
+                                ecgChart.setVisibleXRangeMaximum(500f)
+                                ecgChart.moveViewToX(dataSet.entryCount.toFloat())
+                            }
+                        }
+                        // ---------------------------------------------
+
                         state.latency?.let {
-                            Log.i(TAG, "Inference Latency: $it ms")
+                            Log.i("InferenceLatency", "Latensi Inferensi: $it ms")
                         }
                     }
                     is ECGUIState.Error -> {
@@ -124,46 +149,42 @@ class EcgGraphActivity : AppCompatActivity() {
     }
 
     private fun setupEcgChartData() {
-        ecgChart.setTouchEnabled(true); ecgChart.description.isEnabled = false
+        // 1. Konfigurasi tampilan umum dari chart
+        ecgChart.setTouchEnabled(true)
+        ecgChart.description.isEnabled = false
         ecgChart.setDrawGridBackground(false)
 
         ecgChart.xAxis.apply {
-            position = XAxis.XAxisPosition.BOTTOM; setDrawGridLines(false)
+            position = XAxis.XAxisPosition.BOTTOM
+            setDrawGridLines(false)
             textColor = Color.parseColor("#EBE6E0")
             axisLineColor = Color.parseColor("#EBE6E0")
         }
 
         ecgChart.axisLeft.apply {
             textColor = Color.parseColor("#EBE6E0")
-            axisLineColor = Color.parseColor("#EBE6E0");
+            axisLineColor = Color.parseColor("#EBE6E0")
             gridColor = Color.DKGRAY
         }
 
         ecgChart.axisRight.isEnabled = false
 
-        val rawDataSet = LineDataSet(null, LABEL_RAW).apply {
+        // 2. Buat SATU dataset untuk menampung data real-time kita
+        val dataSet = LineDataSet(null, "Filtered ECG").apply {
             lineWidth = 1.5f
-            setDrawCircles(false); setDrawValues(false); color = Color.CYAN
+            setDrawCircles(false)
+            setDrawValues(false)
+            color = Color.CYAN
+            mode = LineDataSet.Mode.CUBIC_BEZIER
         }
 
-        val baselineFilteredDataSet = LineDataSet(null, LABEL_BASELINE_FILTERED).apply {
-            lineWidth = 1.5f
-            setDrawCircles(false); setDrawValues(false); color = Color.MAGENTA
-        }
+        // 3. Buat LineData dan masukkan dataset kosong tersebut ke dalamnya
+        val lineData = LineData(dataSet)
 
-        val rPeakDataSet = LineDataSet(null, LABEL_R_PEAKS).apply {
-            color = Color.TRANSPARENT // Warna penanda R-peak
-            lineWidth = 0f // Tidak menggambar garis antar R-peak
-            setDrawCircles(true) // Aktifkan lingkaran
-            setCircleColor(Color.YELLOW)
-            circleRadius = 5f // Ukuran lingkaran
-            setDrawCircleHole(false)
-            setDrawValues(false) // Tidak menampilkan nilai di atas titik
-            mode = LineDataSet.Mode.CUBIC_BEZIER // Ini hanya agar tidak error, karena tidak ada garis
-        }
+        // 4. Pasang LineData ke chart. SELESAI.
+        ecgChart.data = lineData
 
-        ecgChart.data = LineData(mutableListOf<ILineDataSet>()) // Mulai dengan data kosong
-        ecgChart.invalidate()
+        // (Tidak perlu invalidate() di sini, karena belum ada data)
     }
 
     private fun setupMorphologyChartData() {

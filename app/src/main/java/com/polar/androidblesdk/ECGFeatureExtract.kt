@@ -9,7 +9,7 @@ import kotlin.math.pow // Tambahkan import ini untuk .pow()
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
-object EcgFeatureExtractor {
+object ECGFeatureExtractor {
 
     private const val TAG = "EcgFeatureExtractor"
 
