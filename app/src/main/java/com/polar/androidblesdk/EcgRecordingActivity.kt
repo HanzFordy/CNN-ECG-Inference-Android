@@ -11,6 +11,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.polar.sdk.api.PolarBleApi
+import com.polar.sdk.api.model.EcgSample
 import com.polar.sdk.api.model.PolarEcgData
 import com.polar.sdk.api.model.PolarSensorSetting
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
@@ -63,7 +64,7 @@ class EcgRecordingActivity : AppCompatActivity() {
         stopRecordButton = findViewById(R.id.stop_record_button)
         fileSavedTextView = findViewById(R.id.file_saved_textview)
 
-        api = PolarApiSingleton.getApi(this)
+        api = PolarAPISingle.getApi(this)
 
         startRecordButton.setOnClickListener {
             if (!isRecording) {
@@ -118,11 +119,16 @@ class EcgRecordingActivity : AppCompatActivity() {
                 ecgDisposable = api.startEcgStreaming(deviceId!!, sensorSetting)
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe({ ecgData: PolarEcgData ->
-                        if (!isRecording) {
-                            if (ecgDisposable?.isDisposed == false) ecgDisposable?.dispose()
-                            return@subscribe
+                        if (isRecording) {
+                            ecgData.samples.forEach { sample ->
+                                // PERIKSA APAKAH SAMPLE INI ADALAH TIPE YANG MENGANDUNG VOLTAGE
+                                if (sample is EcgSample) {
+                                    // Setelah 'is' check, Kotlin secara otomatis "pintar"
+                                    // dan memperlakukan 'sample' sebagai EcgSample di dalam blok ini.
+                                    ecgRecordingBuffer.add(sample.voltage) // SEKARANG PASTI BISA DIAKSES!
+                                }
+                            }
                         }
-                        ecgData.samples.forEach { ecgRecordingBuffer.add(it.voltage) }
                     },
                         { error ->
                             Log.e(TAG, "ECG stream error saat merekam: ${error.message}", error)
