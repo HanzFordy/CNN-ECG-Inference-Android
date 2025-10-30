@@ -1,11 +1,13 @@
 package com.polar.androidblesdk
 
 import android.util.Log
+import com.polar.sdk.api.model.EcgSample
 import com.polar.sdk.api.model.PolarEcgData
+import com.polar.sdk.api.model.PolarEcgDataSample
 
 import kotlin.math.abs
 
-class EcgBandpassFilter {
+class ECGBandpassFilter {
 
     // Didesain untuk: Butterworth Order 4, HIGH-PASS, Cutoff = 0.05 Hz, Fs = 130 Hz
     private val sosCoefficients = arrayOf(
@@ -74,9 +76,14 @@ class EcgBandpassFilter {
      * @param samples List dari PolarEcgData.Sample.
      * @return List Double yang berisi nilai voltage ECG yang sudah difilter.
      */
-    fun filterPolarSamples(samples: List<PolarEcgData.PolarEcgDataSample>): List<Double> {
-        // Konversi voltage (Int, microvolts) ke Double
-        val inputDoubles = samples.map { it.voltage.toDouble() }
+    fun filterPolarSamples(samples: List<PolarEcgDataSample>): List<Double> {
+        val inputDoubles = samples.mapNotNull { sample ->
+            if (sample is EcgSample) {
+                sample.voltage.toDouble()
+            } else {
+                null
+            }
+        }
         return filterChunk(inputDoubles)
     }
 
