@@ -21,7 +21,7 @@ class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_
     private var morphInputShape: IntArray = intArrayOf(1, 37)    // Default, akan diverifikasi
     private var outputShape: IntArray = intArrayOf(1, 5)       // Default, akan diverifikasi
 
-    private val classNames = arrayOf("Normal", "SVEB", "VEB", "Fusion", "Unknown") // Sesuaikan
+    val classNames = arrayOf("Normal", "SVEB", "VEB", "Fusion", "Unknown") // Sesuaikan
 
     companion object {
         private const val TAG = "EcgClassifierTFLite"
@@ -100,38 +100,31 @@ class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_
         }
 
         try {
-            // A. Siapkan ByteBuffer untuk Input Sinyal ECG (misal, 1x180x1 Float32)
             val cnnInputByteBuffer = ByteBuffer.allocateDirect(cnnInputShape.reduce { acc, i -> acc * i } * 4) // 1*180*1*4
             cnnInputByteBuffer.order(ByteOrder.nativeOrder())
             ecgSegment.forEach { cnnInputByteBuffer.putFloat(it.toFloat()) }
             cnnInputByteBuffer.rewind()
 
-            // B. Siapkan ByteBuffer untuk Input Fitur Morfologi (misal, 1x37 Float32)
             val morphInputByteBuffer = ByteBuffer.allocateDirect(morphInputShape.reduce { acc, i -> acc * i } * 4) // 1*37*4
             morphInputByteBuffer.order(ByteOrder.nativeOrder())
             scaledMorphFeatures.forEach { morphInputByteBuffer.putFloat(it) }
             morphInputByteBuffer.rewind()
 
-            // C. Siapkan array input untuk interpreter
             val inputsArray = arrayOfNulls<Any>(2)
-            // Penting: Sesuaikan urutan ini jika urutan input model TFLite Anda berbeda!
-            // Verifikasi dengan logTensorDetails() atau Netron.
-            // Asumsi Input 0 adalah CNN (raw_input), Input 1 adalah Morfologi.
+
             inputsArray[0] = cnnInputByteBuffer
             inputsArray[1] = morphInputByteBuffer
 
-
-            // D. Siapkan map output untuk interpreter
             val outputProbabilitiesBuffer = Array(outputShape[0]) { FloatArray(outputShape[1]) } // Misal 1x5
             val outputsMap = mutableMapOf<Int, Any>()
             outputsMap[0] = outputProbabilitiesBuffer
 
-            // E. Jalankan Inferensi
             interpreter!!.runForMultipleInputsOutputs(inputsArray, outputsMap)
 
-            // F. Dapatkan Hasil Prediksi
             val probabilities = outputProbabilitiesBuffer[0]
             val predictedClassIndex = probabilities.indices.maxByOrNull { probabilities[it] } ?: -1
+
+            Log.d("CLASSIFIER_PROOF", "Inferensi BERHASIL. Hasil Index: $predictedClassIndex, Probabilitas: ${probabilities.joinToString()}")
 
             return Pair(predictedClassIndex, probabilities)
 
@@ -141,10 +134,6 @@ class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_
         }
     }
 
-    /**
-     * Melepaskan resource interpreter TFLite.
-     * Panggil ini saat classifier tidak lagi dibutuhkan (misalnya di onDestroy Activity).
-     */
 
     fun isReady(): Boolean { // <-- Fungsi getter publik baru
         return this.isInitialized && this.interpreter != null
