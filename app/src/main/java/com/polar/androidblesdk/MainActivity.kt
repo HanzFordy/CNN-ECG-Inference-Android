@@ -14,17 +14,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.graphics.drawable.DrawableCompat
 import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
-import com.polar.sdk.api.PolarBleApiDefaultImpl
 import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.errors.PolarInvalidArgument
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarEcgData
 import com.polar.sdk.api.model.PolarHealthThermometerData
-import com.polar.sdk.api.model.PolarHrData
 import com.polar.sdk.api.model.PolarSensorSetting
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Flowable
-import io.reactivex.rxjava3.core.Single
 import io.reactivex.rxjava3.disposables.Disposable
 
 class MainActivity : AppCompatActivity() {
@@ -45,17 +42,10 @@ class MainActivity : AppCompatActivity() {
     private var ecgDisposable: Disposable? = null
     private lateinit var connectButton: Button
     private lateinit var autoConnectButton: Button
-    private lateinit var scanButton: Button
-    private lateinit var broadcastButton: Button
     private lateinit var ecgButton: Button
-    private lateinit var hrButton: Button
-    private lateinit var hrTextView: TextView
-    private lateinit var openGraphButton: Button
-    private val hrValues = mutableListOf<Int>()
     private val ecgFilter = ECGBandpassFilter()
     private var isEcgStreaming = false
     private var ecgSampleRate: Int = 0
-    private lateinit var openRecordPageButton: Button
 
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,14 +59,7 @@ class MainActivity : AppCompatActivity() {
 
         connectionStatusTextView = findViewById(R.id.connection_status)
         autoConnectButton = findViewById(R.id.auto_connect_button)
-        scanButton = findViewById(R.id.scan_button)
-        broadcastButton = findViewById(R.id.broadcast_button)
         ecgButton = findViewById(R.id.ecg_button)
-        hrButton = findViewById(R.id.hr_button)
-        hrTextView = findViewById(R.id.hr_text)
-        openRecordPageButton = findViewById(R.id.ecgrecord_button)
-
-
 
         // Callback API untuk status koneksi
         api.setApiCallback(object : PolarBleApiCallback() {
@@ -180,53 +163,6 @@ class MainActivity : AppCompatActivity() {
                 )
         }
 
-
-
-        // Tombol Scan Devices
-        scanButton.setOnClickListener {
-            Log.d(TAG, "Scanning for devices...")
-
-            val detectedDevices = mutableListOf<String>()
-
-            val scanDisposable = api.searchForDevice()
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(
-                    { polarDeviceInfo: PolarDeviceInfo ->
-                        Log.d(TAG, "Found device: ${polarDeviceInfo.deviceId} (RSSI: ${polarDeviceInfo.rssi})")
-                        detectedDevices.add(polarDeviceInfo.deviceId)
-                    },
-                    { error ->
-                        Log.e(TAG, "Scan failed: $error")
-                        Toast.makeText(this, "Gagal melakukan scan: $error", Toast.LENGTH_SHORT).show()
-                    }
-                )
-
-            // Stop scanning dan tampilkan hasil setelah 5 detik
-            Handler(Looper.getMainLooper()).postDelayed({
-                scanDisposable.dispose() // hentikan scan
-                val message = if (detectedDevices.isNotEmpty()) {
-                    "ID sensor yang terdeteksi: ${detectedDevices.joinToString(", ")}"
-                } else {
-                    "Tidak ada sensor yang terdeteksi."
-                }
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-            }, 5000)
-        }
-
-
-
-        // Tombol Listen Broadcast HR
-        broadcastButton.setOnClickListener {
-            Log.d(TAG, "Listening for HR broadcasts...")
-            api.startListenForPolarHrBroadcasts(null)
-                .subscribe(
-                    { hrData ->
-                        Log.d(TAG, "HR Broadcast: ${hrData.polarDeviceInfo.deviceId} - HR: ${hrData.hr}")
-                    },
-                    { error -> Log.e(TAG, "Broadcast failed: $error") }
-                )
-        }
-
         // Tombol ECG
         ecgButton.setOnClickListener {
             val isDisposed = ecgDisposable?.isDisposed ?: true
@@ -307,45 +243,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Tombol HR Stream
-        hrButton.setOnClickListener {
-            if (hrDisposable == null) {
-                hrDisposable = api.startHrStreaming(deviceId)
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribe(
-                        { hrData: PolarHrData ->
-                            for (sample in hrData.samples) {
-                                val hrText = "HR: ${sample.hr} BPM, RR: ${sample.rrsMs}"
-                                hrTextView.text = hrText
-                                hrValues.add(sample.hr)  // Simpan data HR untuk grafik
-                            }
-                        },
-                        { error -> Log.e(TAG, "HR stream failed: $error") }
-                    )
-                hrButton.text = "Stop HR Stream"
-            } else {
-                hrDisposable?.dispose()
-                hrDisposable = null
-                hrButton.text = "Start HR Stream"
-            }
-        }
-
         ecgButton.setOnClickListener {
             val intent = Intent(this, EcgGraphActivity::class.java)
             intent.putExtra("DEVICE_ID", deviceId)
             startActivity(intent)
-        }
-
-        openRecordPageButton.setOnClickListener {
-            if (deviceConnected && deviceId.isNotEmpty()) { // Pastikan sudah terhubung dan deviceId ada
-                val intent = Intent(this, EcgRecordingActivity::class.java)
-                intent.putExtra(EcgRecordingActivity.EXTRA_DEVICE_ID, deviceId)
-                startActivity(intent)
-            } else {
-                Toast.makeText(this, "Sensor belum terhubung. Hubungkan sensor terlebih dahulu.", Toast.LENGTH_LONG).show()
-                // Atau, jika deviceId kosong tapi deviceConnected true (jarang terjadi),
-                // Anda mungkin perlu logika untuk memilih perangkat lagi atau auto-connect.
-            }
         }
     }
 
@@ -361,16 +262,8 @@ class MainActivity : AppCompatActivity() {
         alertDialog.show()
     }
 
-    private fun toggleButtonDown(button: Button, text: String? = null) {
-        toggleButton(button, true, text)
-    }
-
     private fun toggleButtonDown(button: Button, @StringRes resourceId: Int) {
         toggleButton(button, true, getString(resourceId))
-    }
-
-    private fun toggleButtonUp(button: Button, text: String? = null) {
-        toggleButton(button, false, text)
     }
 
     private fun toggleButtonUp(button: Button, @StringRes resourceId: Int) {
@@ -388,12 +281,6 @@ class MainActivity : AppCompatActivity() {
             DrawableCompat.setTint(buttonDrawable, resources.getColor(R.color.primaryColor))
         }
         button.background = buttonDrawable
-    }
-
-    private fun requestStreamSettings(identifier: String, feature: PolarBleApi.PolarDeviceDataType): Flowable<PolarSensorSetting> {
-        return api.requestStreamSettings(identifier, feature)
-            .observeOn(AndroidSchedulers.mainThread())
-            .toFlowable()
     }
 
     public override fun onPause() {
