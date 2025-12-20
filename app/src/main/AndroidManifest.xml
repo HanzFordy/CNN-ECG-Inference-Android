@@ -62,6 +62,8 @@
         </activity>
         <activity
             android:name=".EcgGraphActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.NoActionBar"
             android:screenOrientation="landscape"/>
         <activity
             android:name=".EcgRecordingActivity"
