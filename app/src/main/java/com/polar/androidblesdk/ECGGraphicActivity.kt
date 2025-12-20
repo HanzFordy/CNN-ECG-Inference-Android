@@ -1,10 +1,9 @@
-// File: EcgGraphActivity.kt (VERSI BARU - MVVM)
 package com.polar.androidblesdk
 
 import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
-import android.widget.Button
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
@@ -12,7 +11,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.XAxis
-import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
@@ -28,6 +26,7 @@ class EcgGraphActivity : AppCompatActivity() {
     private lateinit var ecgDataText: TextView
     private lateinit var ecgChart: LineChart
     private lateinit var morphologyChart: LineChart
+    private lateinit var progressBar: ProgressBar
     private lateinit var api: PolarBleApi
     private var deviceId: String? = null
 
@@ -83,8 +82,9 @@ class EcgGraphActivity : AppCompatActivity() {
         ecgChart = findViewById(R.id.ecg_chart)
         morphologyChart = findViewById(R.id.morphology_chart)
         ecgDataText = findViewById(R.id.ecg_data_text)
+        progressBar = findViewById(R.id.buffering_progress_bar)
 
-        setupCharts() // Panggil fungsi untuk setup grafik
+        setupChart() // Panggil fungsi untuk setup grafik
 
         deviceId = intent.getStringExtra("DEVICE_ID")
         if (deviceId == null) {
@@ -98,54 +98,83 @@ class EcgGraphActivity : AppCompatActivity() {
         Log.d("ECG_FLOW_DEBUG", "ACTIVITY: Memerintahkan ViewModel untuk memulai.")
         viewModel.startStreaming(api, deviceId!!)
 
-        lifecycleScope.launch {
-            Log.d("ECG_FLOW_DEBUG", "ACTIVITY: Mulai 'mendengarkan' ViewModel.")
-            viewModel.uiState.collect { state ->
-                Log.d("ECG_FLOW_DEBUG", "ACTIVITY: Menerima state baru -> $state")
-                when (state) {
-                    is ECGUIState.Idle -> {
-                        ecgDataText.text = "Menunggu..."
-                    }
-                    is ECGUIState.Streaming -> {
-                        ecgDataText.text = state.message
+        observeViewModel()
+    }
 
-                        // --- LOGIKA BARU UNTUK MENGGAMBAR GRAFIK ---
-                        state.ecgDataPoints?.let { dataPoints ->
-                            // Cek dulu apakah data dan dataset sudah ada
-                            if (ecgChart.data != null && ecgChart.data.dataSetCount > 0) {
-                                // Ambil dataset dengan aman
-                                val dataSet = ecgChart.data.getDataSetByIndex(0) as LineDataSet
+    private fun setupChart() {
+        // Konfigurasi tampilan umum chart
+        ecgChart.description.isEnabled = false
+        ecgChart.setDrawGridBackground(false)
+        // ... (konfigurasi lain: xAxis, axisLeft, dll.)
 
-                                // Ganti data di dataset dengan yang baru
-                                dataSet.values = dataPoints
+        // Buat semua DataSet yang kita butuhkan, lalu pasang ke chart
+        val signalDataSet = createSignalDataSet()
 
-                                // Beri tahu chart bahwa data telah berubah
-                                ecgChart.data.notifyDataChanged()
-                                ecgChart.notifyDataSetChanged()
+        val lineData = LineData(signalDataSet)
+        ecgChart.data = lineData
+        ecgChart.invalidate()
+    }
 
-                                // Atur view port dan pindahkan ke data terbaru
-                                ecgChart.setVisibleXRangeMaximum(500f)
-                                ecgChart.moveViewToX(dataSet.entryCount.toFloat())
-                            }
-                        }
-                        // ---------------------------------------------
-
-                        state.latency?.let {
-                            Log.i("InferenceLatency", "Latensi Inferensi: $it ms")
-                        }
-                    }
-                    is ECGUIState.Error -> {
-                        ecgDataText.text = "Error: ${state.errorMessage}"
-                    }
-                }
-            }
+    private fun createSignalDataSet(): LineDataSet {
+        return LineDataSet(null, "Filtered ECG").apply {
+            color = Color.CYAN
+            lineWidth = 1.5f
+            setDrawValues(false)
+            setDrawCircles(false)
+            mode = LineDataSet.Mode.CUBIC_BEZIER
         }
     }
 
-    private fun setupCharts() {
-        // Pindahkan semua kode setup grafik ke sini agar onCreate lebih bersih
-        setupEcgChartData()
-        setupMorphologyChartData()
+    private fun observeViewModel(){
+        lifecycleScope.launch {
+            Log.d("ECG_FLOW_DEBUG", "ACTIVITY: Mulai 'mendengarkan' ViewModel.")
+            viewModel.uiState
+                .collect { state ->
+                    Log.d("ECG_FLOW_DEBUG", "ACTIVITY: Menerima state baru")
+
+                    when (state) {
+                        is ECGUIState.Buffering -> {
+                            ecgDataText.text = "Mohon tunggu, sedang mengkalibrasi dan mengumpulkan data awal..."
+                            progressBar.visibility = android.view.View.VISIBLE // Tampilkan progress bar
+                            progressBar.max = state.totalSeconds // Atur nilai maks
+                            progressBar.progress = state.progressSeconds // Update progress
+                            ecgChart.visibility = android.view.View.INVISIBLE // Sembunyikan chart saat buffering
+
+                        }
+                        is ECGUIState.Error -> {
+                            ecgDataText.text = "Error: ${state.message}"
+                            progressBar.visibility = android.view.View.GONE // Sembunyikan jika error
+                            ecgChart.visibility = android.view.View.VISIBLE
+                        }
+                        is ECGUIState.Streaming -> {
+                            ecgDataText.text = state.summaryText
+
+                            progressBar.visibility = android.view.View.GONE // Sembunyikan progress bar
+                            ecgChart.visibility = android.view.View.VISIBLE // Tampilkan chart
+
+                            // --- LOGIKA BARU UNTUK MENGGAMBAR GRAFIK ---
+                            state.ecgDataPoints?.let { dataPoints ->
+                                val signalDataSet =
+                                    ecgChart.data.getDataSetByIndex(0) as LineDataSet
+
+                                // Gunakan cara yang paling aman: clear() lalu addEntry()
+                                signalDataSet.clear()
+                                dataPoints.forEach { entry ->
+                                    signalDataSet.addEntry(entry)
+                                }
+
+                                ecgChart.data.notifyDataChanged()
+                                ecgChart.notifyDataSetChanged()
+                                ecgChart.invalidate()
+                            }
+                        }
+
+                        is ECGUIState.Error -> {
+                            ecgDataText.text = "Error: ${state.message}"
+                        }
+                    }
+                }
+        }
     }
 
     private fun setupEcgChartData() {
