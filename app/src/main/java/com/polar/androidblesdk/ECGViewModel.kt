@@ -6,113 +6,114 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.model.EcgSample
-import com.polar.sdk.api.model.PolarEcgDataSample
 import com.github.mikephil.charting.data.Entry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // Gunakan AndroidViewModel untuk mendapatkan applicationContext saat inisialisasi Classifier
 class ECGViewModel(application: Application) : AndroidViewModel(application) {
 
     // Ini adalah 'state' yang akan diamati oleh UI
-    private val _uiState = MutableStateFlow<ECGUIState>(ECGUIState.Idle)
+    private val _uiState = MutableStateFlow<ECGUIState>(ECGUIState.Buffering(progressSeconds = 0, totalSeconds = 40))
     val uiState: StateFlow<ECGUIState> = _uiState.asStateFlow()
 
-    // --- SEMUA LOGIKA DAN STATE PINDAH KE SINI ---
     private val ecgFilter = ECGBandpassFilter()
-    private val processingBuffer = ArrayDeque<Double>()
-    private val ecgClassifier: ECGClassifierTFLite = ECGClassifierTFLite(application.applicationContext)
+    private val ecgClassifier: ECGClassifierTFLite? = try {
+        ECGClassifierTFLite(application.applicationContext)
+    } catch (e: Exception) {
+        Log.e("EcgViewModel", "FATAL: Gagal memuat model TFLite!", e)
+        _uiState.value = ECGUIState.Error("Gagal memuat model klasifikasi.")
+        null
+    }
 
-    // Konfigurasi dan konstanta
+    private val processingBuffer = ArrayDeque<Double>() // Sliding window
+    private val chartDataBuffer = ArrayDeque<Double>() // Data poin grafik
+    private val classificationCounts = mutableMapOf<String, Int>()
+
+    // Konfigurasi
+    private val BUFFERING_DURATION_SECONDS = 40 // Ubah ke Int
+    private var streamStartTime = 0L
+
     private val WINDOW_SIZE = 360
     private val WINDOW_SLIDE_STEP = 180
-    private val classNames = arrayOf("Normal", "SVEB", "VEB", "Fusion", "Unknown")
-    private val SCALER_MEANS = EcgGraphActivity.SCALER_MEANS // Akses dari companion object
-    private val SCALER_STD_DEVS = EcgGraphActivity.SCALER_STD_DEVS // Akses dari companion object
-
-    private val chartDataBuffer = ArrayDeque<Entry>()
-    private var chartDataIndex = 0L // Untuk sumbu X
+    private val MAX_CHART_POINTS = 500
 
     fun startStreaming(api: PolarBleApi, deviceId: String) {
         Log.d("ECG_FLOW_DEBUG", "VIEWMODEL: Fungsi startStreaming dipanggil.")
 
-        _uiState.value = ECGUIState.Streaming("Mempersiapkan stream...")
+        streamStartTime = System.currentTimeMillis()
+        _uiState.value = ECGUIState.Buffering(0, BUFFERING_DURATION_SECONDS)
         ecgFilter.reset()
         processingBuffer.clear()
+        chartDataBuffer.clear()
+        classificationCounts.clear()
 
-        chartDataBuffer.clear() // Reset buffer grafik juga
-        chartDataIndex = 0L
+        viewModelScope.launch(Dispatchers.IO) {
+            ECGRepository.startEcgStream(api, deviceId)
+                .onEach { polarEcgData ->
+                    // --- PEMROSESAN SELALU BERJALAN DI LATAR ---
+                    val rawSamples = polarEcgData.samples.mapNotNull { if (it is EcgSample) it.voltage.toDouble() else null }
+                    if (rawSamples.isEmpty()) return@onEach
+                    val filteredSamples = ecgFilter.filterChunk(rawSamples)
 
-        viewModelScope.launch {
-            Log.d("ECG_FLOW_DEBUG", "VIEWMODEL: Coroutine dimulai, memanggil Repository.")
+                    processingBuffer.addAll(filteredSamples)
+                    chartDataBuffer.addAll(filteredSamples)
 
-            try{
-                ECGRepository.startEcgStream(api, deviceId)
-                    .flowOn(Dispatchers.IO)
-                    .onEach { polarEcgData ->
-                        Log.d("ECG_FLOW_DEBUG", "VIEWMODEL: Menerima ${polarEcgData.samples.size} sampel dari sensor.")
-                        // Gunakan mapNotNull untuk memfilter dan mengubah tipe secara aman
-                        val rawSamples = polarEcgData.samples.mapNotNull { sample ->
-                            if (sample is EcgSample) {
-                                sample.voltage.toDouble() // Jika benar EcgSample, ambil voltage-nya
-                            } else {
-                                null // Jika bukan (mis. FecgSample), abaikan saja
-                            }
+                    while (chartDataBuffer.size > (MAX_CHART_POINTS + WINDOW_SIZE)) {
+                        chartDataBuffer.removeFirst()
+                    }
+
+                    val elapsedTime = System.currentTimeMillis() - streamStartTime
+
+                    if (elapsedTime < BUFFERING_DURATION_SECONDS * 1000) {
+                        // --- KITA MASIH DALAM FASE BUFFERING ---
+                        val progress = (elapsedTime / 1000).toInt()
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = ECGUIState.Buffering(progress, BUFFERING_DURATION_SECONDS)
                         }
 
-                        val filteredSamples = ecgFilter.filterChunk(rawSamples)
-                        processingBuffer.addAll(filteredSamples)
-                        // --- LOGIKA BARU UNTUK MENGUMPULKAN DATA GRAFIK ---
-                        filteredSamples.forEach { voltage ->
-                            chartDataBuffer.add(Entry(chartDataIndex.toFloat(), voltage.toFloat()))
-                            chartDataIndex++
-                        }
-                        // Batasi jumlah data di buffer agar tidak membebani memori
-                        while (chartDataBuffer.size > 500) { // Tampilkan data 500 poin terakhir
-                            chartDataBuffer.removeFirst()
-                        }
-
-                        var summary = ""
-                        var latency: Long? = null
+                    } else {
+                        // --- KITA SUDAH MASUK FASE STREAMING ---
 
                         while (processingBuffer.size >= WINDOW_SIZE) {
-                            // TAMBAHKAN KEMBALI DEKLARASI INI
                             val windowToProcess = processingBuffer.take(WINDOW_SIZE)
                             repeat(WINDOW_SLIDE_STEP) { if (processingBuffer.isNotEmpty()) processingBuffer.removeFirst() }
 
-                            // Sekarang 'windowToProcess' sudah dikenal
-                            val (s, l) = processEcgWindow(windowToProcess, 130.0)
-                            summary = s
-                            latency = l
+                            // Proses window, yang akan meng-update 'classificationCounts'
+                            val latency = processEcgWindow(windowToProcess, 130.0)
+                            Log.i("InferenceLatency", "Latensi window: $latency ms")
                         }
 
-                        _uiState.value = ECGUIState.Streaming(
-                            message = if (summary.isNotEmpty()) summary else (_uiState.value as? ECGUIState.Streaming)?.message ?: "Menerima data...",
-                            latency = latency,
-                            ecgDataPoints = chartDataBuffer.toList() // Kirim salinan buffer grafik
-                        )
+                        // Buat data untuk dikirim ke UI
+                        val summary = buildSummaryText()
+                        val chartEntries = chartDataBuffer.mapIndexed { index, voltage ->
+                            Entry(index.toFloat(), voltage.toFloat())
+                        }
+
+                        // Kirim update ke UI
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = ECGUIState.Streaming(
+                                summaryText = summary,
+                                ecgDataPoints = chartEntries
+                            )
+                        }
                     }
-                    .flowOn(Dispatchers.Default) // Pastikan semua proses berat (onEach) berjalan di background
-                    .catch { e ->
-                        Log.e("ECG_FLOW_DEBUG", "VIEWMODEL: Error di dalam stream!", e)
-                        _uiState.value = ECGUIState.Error(e.message ?: "Unknown Stream Error")
+                }
+                .catch { e ->
+                    withContext(Dispatchers.Main) {
+                        _uiState.value = ECGUIState.Error(e.message ?: "Error")
                     }
-                    .collect()
-                Log.d("ECG_FLOW_DEBUG", "VIEWMODEL: Selesai mengoleksi stream (seharusnya tidak terjadi jika stream kontinu).")
-            } catch (e: Exception) {
-                Log.e("ECG_FLOW_DEBUG", "VIEWMODEL: Gagal memulai getEcgStream dari Repository!", e)
-            }
+                }
+                .collect()
         }
     }
 
-    // --- FUNGSI-FUNGSI LOGIKA PINDAH KE SINI ---
-    private fun processEcgWindow(signalWindow: List<Double>, fs: Double): Pair<String, Long> {
-        val rPeakIndices = ECGFeatureExtractor.findRPeaks(signalWindow, fs)
-        if (rPeakIndices.isEmpty()) return Pair("", 0L)
-
-        val predictionCounts = IntArray(classNames.size) { 0 }
+    private fun processEcgWindow(signalWindow: List<Double>, fs: Double): Long {
         var totalInferenceTimeMs = 0L
+
+        val rPeakIndices = ECGFeatureExtractor.findRPeaks(signalWindow, fs)
 
         for (rPeakIdx in rPeakIndices) {
             val ecgSegment = ECGFeatureExtractor.getEcgSegmentAroundRPeak(
@@ -120,32 +121,45 @@ class ECGViewModel(application: Application) : AndroidViewModel(application) {
             )
             if (ecgSegment != null) {
                 val morphFeatures = ECGFeatureExtractor.extractKotlinMorphologyFeatures(ecgSegment, fs)
-                val scaledFeatures = scaleMorphologyFeatures(morphFeatures, SCALER_MEANS, SCALER_STD_DEVS)
+                val scaledFeatures = scaleMorphologyFeatures(morphFeatures, EcgGraphActivity.SCALER_MEANS, EcgGraphActivity.SCALER_STD_DEVS)
 
-                if (scaledFeatures.isNotEmpty() && ecgClassifier.isReady()) {
+                if (scaledFeatures.isNotEmpty() && ecgClassifier?.isReady() == true) {
                     val inferenceStartTime = System.nanoTime()
-                    val (predictedIndex, _) = ecgClassifier.classify(ecgSegment, scaledFeatures)
+                    val (predictedIndex, _) = ecgClassifier!!.classify(ecgSegment, scaledFeatures)
+
                     totalInferenceTimeMs += (System.nanoTime() - inferenceStartTime) / 1_000_000
 
-                    if (predictedIndex in predictionCounts.indices) {
-                        predictionCounts[predictedIndex]++
-                    }
+                    val className = ecgClassifier!!.classNames.getOrElse(predictedIndex) { "Unknown" }
+
+                    // Update counter global
+                    classificationCounts[className] = (classificationCounts[className] ?: 0) + 1
                 }
             }
         }
-
-        val detectedClasses = predictionCounts.mapIndexed { index, count ->
-            if (count > 0) "${classNames[index]}($count)" else null
-        }.filterNotNull()
-
-        val summaryText = if (detectedClasses.isNotEmpty()) "Deteksi: ${detectedClasses.joinToString(", ")}" else "Detak Jantung Normal"
-        return Pair(summaryText, totalInferenceTimeMs)
+        return totalInferenceTimeMs
     }
 
-    private fun scaleMorphologyFeatures(features: DoubleArray, means: DoubleArray, stdDevs: DoubleArray): FloatArray {
+    private fun buildSummaryText(): String {
+        if (classificationCounts.isEmpty()) {
+            return "Menganalisis..."
+        }
+        return classificationCounts.entries.sortedBy { it.key }.joinToString(" | ") {
+            "${it.key}: ${it.value}"
+        }
+    }
+
+
+    // --- Fungsi Helper ---
+    private fun scaleMorphologyFeatures(
+        features: DoubleArray,
+        means: DoubleArray,
+        stdDevs: DoubleArray
+    ): FloatArray {
         // ... (Logika scaling sama persis, tidak perlu diubah) ...
         val scaled = FloatArray(features.size)
-        if (features.size != means.size || features.size != stdDevs.size) { return FloatArray(0) }
+        if (features.size != means.size || features.size != stdDevs.size) {
+            return FloatArray(0)
+        }
         for (i in features.indices) {
             if (stdDevs[i] != 0.0 && !stdDevs[i].isNaN() && !stdDevs[i].isInfinite()) {
                 scaled[i] = ((features[i] - means[i]) / stdDevs[i]).toFloat()
@@ -156,10 +170,9 @@ class ECGViewModel(application: Application) : AndroidViewModel(application) {
         return scaled
     }
 
-    // Dipanggil otomatis saat ViewModel dihancurkan, cocok untuk membersihkan resource
     override fun onCleared() {
         super.onCleared()
-        ecgClassifier.close()
+        ecgClassifier?.close()
         Log.d("EcgViewModel", "ViewModel cleared and TFLite interpreter closed.")
     }
 }
