@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
+    android:background="@color/backgroundColor"
     tools:context=".EcgGraphActivity">
 
     <LinearLayout
@@ -15,7 +16,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Grafik ECG (Mentah dan Filtered)"
+            android:text="Grafik ECG"
             android:textAppearance="?android:attr/textAppearanceMedium"
             android:layout_marginBottom="4dp" />
 
@@ -53,6 +54,20 @@
             android:layout_marginBottom="4dp"
             android:textColor="@android:color/white"
             android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/buffering_progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="32dp"
+            android:layout_marginEnd="32dp"
+            android:indeterminate="false"
+            android:max="40"
+            android:progress="0"
+            android:visibility="gone"
+            tools:visibility="visible"
+            tools:progress="10"/>
 
         <com.github.mikephil.charting.charts.LineChart
             android:id="@+id/morphology_chart"
