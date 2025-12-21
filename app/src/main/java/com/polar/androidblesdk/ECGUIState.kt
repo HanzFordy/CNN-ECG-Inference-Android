@@ -9,9 +9,8 @@ sealed class ECGUIState {
 
     data class Streaming(
         val summaryText: String,
-//        val latency: Long? = null,
         val ecgDataPoints: List<Entry>? = null,
-//        val markers: List<ClassificationMarker>? = null
+        val markers: List<ClassificationMarker>? = null
     ) : ECGUIState()
 
     data class ClassificationMarker(
