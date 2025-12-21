@@ -16,7 +16,7 @@
             android:id="@+id/connection_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Disconnected"
+            android:text="Tidak tersambung"
             android:textColor="@color/primaryColor"
             android:textSize="18sp"
             android:padding="8dp"
