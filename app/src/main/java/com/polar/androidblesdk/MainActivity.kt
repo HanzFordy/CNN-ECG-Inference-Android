@@ -54,7 +54,7 @@ class MainActivity : AppCompatActivity() {
 
         // Inisialisasi tombol & text view
         connectButton = findViewById(R.id.connect_button)
-        connectButton.text = "Not connected to any device"
+        connectButton.text = "Tidak tersambung ke sensor apapun"
         connectButton.isEnabled = false
 
         connectionStatusTextView = findViewById(R.id.connection_status)
@@ -70,7 +70,7 @@ class MainActivity : AppCompatActivity() {
                 val newText = getString(R.string.disconnect_from_device, deviceId)
                 connectButton.text = newText
                 connectButton.isEnabled = true
-                connectionStatusTextView.text = "Connected to $deviceId"
+                connectionStatusTextView.text = "Tersambung ke sensor $deviceId"
 
                 if (isAutoConnecting) {
                     Toast.makeText(this@MainActivity, "Tersambung ke sensor ${polarDeviceInfo.deviceId}", Toast.LENGTH_SHORT).show()
@@ -85,9 +85,9 @@ class MainActivity : AppCompatActivity() {
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
                 Log.d(TAG, "DISCONNECTED: ${polarDeviceInfo.deviceId}")
                 deviceConnected = false
-                connectButton.text = "Not connected to any device"
+                connectButton.text = "Tidak tersambung ke sensor apapun"
                 connectButton.isEnabled = false
-                connectionStatusTextView.text = "Disconnected"
+                connectionStatusTextView.text = "Tidak tersambung"
             }
 
             override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
