@@ -1,4 +1,4 @@
-package com.polar.androidblesdk // Sesuaikan dengan package Anda
+package com.polar.androidblesdk
 
 import android.content.Context
 import android.content.res.AssetManager
@@ -14,14 +14,11 @@ class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_
 
     private var interpreter: Interpreter? = null
     private var isInitialized = false
+    private var cnnInputShape: IntArray = intArrayOf(1, 180, 1)
+    private var morphInputShape: IntArray = intArrayOf(1, 37)
+    private var outputShape: IntArray = intArrayOf(1, 5)
 
-    // Dimensi input dan output yang diharapkan oleh model TFLite
-    // Ini akan kita dapatkan dari interpreter setelah model dimuat, atau bisa di-hardcode jika sudah pasti
-    private var cnnInputShape: IntArray = intArrayOf(1, 180, 1) // Default, akan diverifikasi
-    private var morphInputShape: IntArray = intArrayOf(1, 37)    // Default, akan diverifikasi
-    private var outputShape: IntArray = intArrayOf(1, 5)       // Default, akan diverifikasi
-
-    val classNames = arrayOf("Normal", "SVEB", "VEB", "Fusion", "Unknown") // Sesuaikan
+    val classNames = arrayOf("Normal", "SVEB", "VEB", "Fusion", "Unknown")
 
     companion object {
         private const val TAG = "EcgClassifierTFLite"
@@ -31,13 +28,9 @@ class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_
         try {
             val modelBuffer = loadModelFile(context.assets, modelFileName)
             val options = Interpreter.Options()
-            // options.setNumThreads(2) // Opsional
-            // options.setUseNNAPI(true) // Opsional
             interpreter = Interpreter(modelBuffer, options)
             isInitialized = true
             Log.i(TAG, "Model TFLite ($modelFileName) berhasil dimuat.")
-
-            // Verifikasi dan simpan shape tensor setelah interpreter dibuat
             logTensorDetails()
 
         } catch (e: IOException) {
@@ -52,8 +45,8 @@ class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_
             val numOutputs = interp.outputTensorCount
             Log.d(TAG, "Model TFLite: Inputs=$numInputs, Outputs=$numOutputs")
 
-            if (numInputs >= 2) { // Asumsi kita punya minimal 2 input
-                val inputTensor0 = interp.getInputTensor(0) // Asumsi urutan: 0=CNN, 1=Morph
+            if (numInputs >= 2) {
+                val inputTensor0 = interp.getInputTensor(0)
                 cnnInputShape = inputTensor0.shape()
                 Log.d(TAG, "Input 0 (CNN): Name='${inputTensor0.name()}', Shape=${cnnInputShape.joinToString()}, DataType=${inputTensor0.dataType()}")
 
@@ -82,13 +75,7 @@ class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_
         val declaredLength = fileDescriptor.declaredLength
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
     }
-
-    /**
-     * Menjalankan inferensi pada satu pasang data (segmen ECG dan fitur morfologi).
-     * @param ecgSegment List<Double> berisi 180 sampel sinyal ECG.
-     * @param scaledMorphFeatures FloatArray berisi 37 fitur morfologi yang sudah di-scale.
-     * @return Pair<Int, FloatArray?>: Indeks kelas prediksi dan array probabilitas, atau Pair(-1, null) jika error.
-     */
+    
     fun classify(ecgSegment: List<Double>, scaledMorphFeatures: FloatArray): Pair<Int, FloatArray?> {
         if (!isInitialized || interpreter == null) {
             Log.e(TAG, "Interpreter TFLite belum diinisialisasi.")
@@ -100,12 +87,12 @@ class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_
         }
 
         try {
-            val cnnInputByteBuffer = ByteBuffer.allocateDirect(cnnInputShape.reduce { acc, i -> acc * i } * 4) // 1*180*1*4
+            val cnnInputByteBuffer = ByteBuffer.allocateDirect(cnnInputShape.reduce { acc, i -> acc * i } * 4)
             cnnInputByteBuffer.order(ByteOrder.nativeOrder())
             ecgSegment.forEach { cnnInputByteBuffer.putFloat(it.toFloat()) }
             cnnInputByteBuffer.rewind()
 
-            val morphInputByteBuffer = ByteBuffer.allocateDirect(morphInputShape.reduce { acc, i -> acc * i } * 4) // 1*37*4
+            val morphInputByteBuffer = ByteBuffer.allocateDirect(morphInputShape.reduce { acc, i -> acc * i } * 4)
             morphInputByteBuffer.order(ByteOrder.nativeOrder())
             scaledMorphFeatures.forEach { morphInputByteBuffer.putFloat(it) }
             morphInputByteBuffer.rewind()
@@ -115,7 +102,7 @@ class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_
             inputsArray[0] = cnnInputByteBuffer
             inputsArray[1] = morphInputByteBuffer
 
-            val outputProbabilitiesBuffer = Array(outputShape[0]) { FloatArray(outputShape[1]) } // Misal 1x5
+            val outputProbabilitiesBuffer = Array(outputShape[0]) { FloatArray(outputShape[1]) }
             val outputsMap = mutableMapOf<Int, Any>()
             outputsMap[0] = outputProbabilitiesBuffer
 
@@ -135,7 +122,7 @@ class ECGClassifierTFLite(context: Context, modelFileName: String = "morphology_
     }
 
 
-    fun isReady(): Boolean { // <-- Fungsi getter publik baru
+    fun isReady(): Boolean {
         return this.isInitialized && this.interpreter != null
     }
 
