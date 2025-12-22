@@ -1,8 +1,6 @@
 package com.polar.androidblesdk
 
 import android.util.Log
-import com.polar.sdk.api.model.EcgSample
-import com.polar.sdk.api.model.PolarEcgDataSample
 
 class ECGBandpassFilter {
     private val sosCoefficients = arrayOf(
