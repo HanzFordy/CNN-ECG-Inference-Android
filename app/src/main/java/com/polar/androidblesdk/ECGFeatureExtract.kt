@@ -1,11 +1,10 @@
-package com.polar.androidblesdk // Sesuaikan dengan package Anda
+package com.polar.androidblesdk
 
 import android.util.Log
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.pow // Tambahkan import ini untuk .pow()
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -13,7 +12,6 @@ object ECGFeatureExtractor {
 
     private const val TAG = "EcgFeatureExtractor"
 
-    // --- FUNGSI UNTUK FILTER MEDIAN DAN REMOVE BASELINE ---
     fun medianFilter(signal: List<Double>, windowSize: Int): List<Double> {
         if (signal.isEmpty() || windowSize <= 0) return signal.toList()
         if (windowSize == 1) return signal.toList()
@@ -36,31 +34,7 @@ object ECGFeatureExtractor {
         return output.toList()
     }
 
-    fun removeBaselineMedian(signal: List<Double>, fs: Double): List<Double> {
-        if (signal.isEmpty() || fs <= 0) return signal.toList()
-        var window1Size = (0.2 * fs).roundToInt() - 1
-        if (window1Size <= 0) window1Size = 1
-        if (window1Size % 2 == 0 && window1Size > 1) window1Size--
-        else if (window1Size % 2 == 0 && window1Size == 0) window1Size = 1
-        var window2Size = (0.6 * fs).roundToInt() - 1
-        if (window2Size <= 0) window2Size = 1
-        if (window2Size % 2 == 0 && window2Size > 1) window2Size--
-        else if (window2Size % 2 == 0 && window2Size == 0) window2Size = 1
-        Log.d(TAG, "RemoveBaseline: fs=$fs, win1=$window1Size, win2=$window2Size")
-        val intermediateSignal = medianFilter(signal, window1Size)
-        val baseline = medianFilter(intermediateSignal, window2Size)
-        if (signal.size != baseline.size) {
-            Log.e(TAG, "RemoveBaseline: Error - signal (${signal.size}) and baseline (${baseline.size}) sizes differ.")
-            return signal.toList()
-        }
-        val filteredSignal = DoubleArray(signal.size)
-        for (i in signal.indices) {
-            filteredSignal[i] = signal[i] - baseline[i]
-        }
-        return filteredSignal.toList()
-    }
-
-    // --- FUNGSI PRA-PEMROSESAN PAN-TOMPKINS ---
+    // Pan-Tompkins
     fun differentiate(signal: List<Double>): List<Double> {
         if (signal.size < 3) {
             if (signal.size == 2) return listOf(signal[1] - signal[0], signal[1] - signal[0])
@@ -97,11 +71,8 @@ object ECGFeatureExtractor {
         return result.toList()
     }
 
-    // --- FUNGSI DETEKSI R-PEAK BERDASARKAN ARTIKEL (YANG AKAN KITA PAKAI) ---
     fun findRPeaks(originalSignal: List<Double>, fs: Double): List<Int> {
         if (originalSignal.isEmpty() || fs <= 0) return emptyList()
-
-        // 1. Langkah-langkah Pra-pemrosesan Pan-Tompkins
         val differentiatedSignal = differentiate(originalSignal)
         val squaredSignal = square(differentiatedSignal)
         val mwiWindowDurationMs = 75.0
@@ -110,22 +81,16 @@ object ECGFeatureExtractor {
         if (smoothedSignal.isEmpty()) return emptyList()
 
         val finalRPeakIndices = mutableListOf<Int>()
-        val refractoryPeriodSamples = (250.0 / 1000.0 * fs).roundToInt() // 250ms refractory
+        val refractoryPeriodSamples = (250.0 / 1000.0 * fs).roundToInt()
         val backsearchWindowMs = 150.0
         val backsearchWindowHalfSamples = (backsearchWindowMs / 2000.0 * fs).roundToInt()
-
-        // --- Perhitungan Threshold yang Lebih Robust ---
-        // Daripada mean+std yang sensitif outlier, kita gunakan kombinasi
-        // persentil dan nilai maksimum dari smoothedSignal.
-        val sortedSmoothed = smoothedSignal.filter { it > 0 }.sorted() // Filter nilai nol/negatif dan urutkan
+        val sortedSmoothed = smoothedSignal.filter { it > 0 }.sorted()
         if (sortedSmoothed.isEmpty()) {
             Log.w(TAG, "Tidak ada puncak positif di smoothedSignal.")
             return emptyList()
         }
         // Ambil nilai di persentil ke-75 sebagai estimasi level sinyal umum
         val p75 = sortedSmoothed[(sortedSmoothed.size * 0.75).toInt()]
-        // Threshold adalah fraksi dari estimasi ini. Faktor 0.5 adalah parameter tuning.
-        // Ini kurang sensitif terhadap satu puncak yang sangat besar di awal.
         val threshold = p75 * 0.5
 
         Log.i(TAG, "Peak Detection (Percentile): p75=${"%.1f".format(p75)}, Threshold=${"%.1f".format(threshold)}")
@@ -134,11 +99,10 @@ object ECGFeatureExtractor {
 
         // Deteksi Puncak
         for (i in 1 until smoothedSignal.size - 1) {
-            if (smoothedSignal[i] > smoothedSignal[i - 1] && smoothedSignal[i] >= smoothedSignal[i + 1]) { // Puncak lokal
+            if (smoothedSignal[i] > smoothedSignal[i - 1] && smoothedSignal[i] >= smoothedSignal[i + 1]) {
                 val currentPeakValue = smoothedSignal[i]
 
                 if (currentPeakValue > threshold && (i - lastRPeakIndex) > refractoryPeriodSamples) {
-                    // Backsearch
                     val searchStart = max(0, i - backsearchWindowHalfSamples)
                     val searchEnd = min(originalSignal.size - 1, i + backsearchWindowHalfSamples)
                     var actualPeakIndex = i; var maxVal = Double.NEGATIVE_INFINITY
@@ -148,7 +112,7 @@ object ECGFeatureExtractor {
                         }
                     }
                     finalRPeakIndices.add(actualPeakIndex)
-                    lastRPeakIndex = i // Gunakan 'i' dari smoothedSignal untuk refractory
+                    lastRPeakIndex = i
                 }
             }
         }
@@ -156,26 +120,17 @@ object ECGFeatureExtractor {
         return finalRPeakIndices.distinct().sorted()
     }
 
-    // --- FUNGSI UNTUK MENGAMBIL SEGMEN ECG ---
     fun getEcgSegmentAroundRPeak(
         fullSignal: List<Double>,
         rPeakIndex: Int,
-        segmentLength: Int, // Akan kita isi dengan 188 atau 180 dari pemanggil
-        samplesBeforeR: Int // Akan kita sesuaikan dari pemanggil
+        segmentLength: Int,
+        samplesBeforeR: Int
     ): List<Double>? {
         if (rPeakIndex < 0 || rPeakIndex >= fullSignal.size) {
             Log.w(TAG, "getEcgSegment: R-peak index ($rPeakIndex) di luar batas sinyal (${fullSignal.size}).")
             return null
         }
-
-        // samplesAfterRInclusive dihitung agar totalnya segmentLength, dengan R-peak di posisi yang benar
-        // Jika R-peak adalah bagian dari 'samplesBeforeR' (misal, R-peak di akhir blok 'before'):
-        // samplesAfterR = segmentLength - samplesBeforeR - 1 (jika R-peak adalah 1 sampel terpisah)
-        // Jika R-peak adalah sampel pertama dari blok 'after' (samplesBeforeR tidak termasuk R-peak):
-        val samplesAfterRInclusive = segmentLength - samplesBeforeR
-
         val startIndex = rPeakIndex - samplesBeforeR
-        // endIndex dihitung agar (endIndex - startIndex + 1) == segmentLength
         val endIndex = startIndex + segmentLength - 1
 
 
@@ -183,19 +138,17 @@ object ECGFeatureExtractor {
             Log.w(TAG, "getEcgSegment: Segmen untuk R-peak @$rPeakIndex (len:$segmentLength, before:$samplesBeforeR) akan keluar batas. Calc_Start: $startIndex, Calc_End: $endIndex, SignalSize: ${fullSignal.size}")
             return null
         }
-        return fullSignal.subList(startIndex, endIndex + 1) // endIndex inklusif untuk subList
+        return fullSignal.subList(startIndex, endIndex + 1)
     }
 
-    // --- FUNGSI UNTUK EKSTRAKSI FITUR MORFOLOGI ---
-
     fun extractKotlinMorphologyFeatures(
-        beatSegment: List<Double>, // Ini SEHARUSNYA 180 sampel
+        beatSegment: List<Double>,
         fs: Double
     ): DoubleArray {
         val numFeatures = 37
         val features = DoubleArray(numFeatures) { 0.0 }
 
-        val EXPECTED_MORPH_SEGMENT_LENGTH = 180 // Sesuai winL+winR Python
+        val EXPECTED_MORPH_SEGMENT_LENGTH = 180
         if (beatSegment.size != EXPECTED_MORPH_SEGMENT_LENGTH) {
             Log.w(TAG, "extractKotlinMorphologyFeatures: Ukuran segmen beat tidak sesuai (${beatSegment.size}), " +
                     "diharapkan $EXPECTED_MORPH_SEGMENT_LENGTH. Mengembalikan fitur nol.")
@@ -203,31 +156,25 @@ object ECGFeatureExtractor {
         }
 
         try {
-            // --- 1. Statistical Features (8 fitur) ---
+            // 1. Fitur Statistik (8 fitur)
             val meanVal = beatSegment.average()
             features[0] = meanVal
 
             val n = beatSegment.size.toDouble()
-            val varianceVal = beatSegment.sumOf { val diff = it - meanVal; diff * diff } / n // Varians populasi (seperti np.var)
+            val varianceVal = beatSegment.sumOf { val diff = it - meanVal; diff * diff } / n
             features[2] = varianceVal
 
             val stdVal = sqrt(varianceVal)
             features[1] = stdVal
-
-            // Skewness (mendekati scipy.stats.skew(beat, bias=False) lalu dikoreksi jika perlu)
             if (stdVal > 1e-9 && n > 2) {
                 val m3 = beatSegment.sumOf { ((it - meanVal) / stdVal).pow(3.0) }
-                // Unbiased skewness estimator (G1)
                 features[3] = (sqrt(n * (n - 1)) / (n - 2)) * (m3 / n)
             } else {
                 features[3] = 0.0
             }
-
-            // Kurtosis (mendekati scipy.stats.kurtosis(beat, fisher=True, bias=False) lalu dikoreksi)
-            // fisher=True berarti dikurangi 3.
             if (stdVal > 1e-9 && n > 0) {
                 val m4normalizedavg = beatSegment.sumOf { ((it - meanVal) / stdVal).pow(4.0) } / n
-                features[4] = m4normalizedavg - 3.0 // Excess kurtosis (Fisher) tanpa koreksi bias sampel
+                features[4] = m4normalizedavg - 3.0
             } else {
                 features[4] = 0.0
             }
@@ -236,7 +183,7 @@ object ECGFeatureExtractor {
             features[6] = beatSegment.minOrNull() ?: 0.0 // min_val
             features[7] = features[5] - features[6]     // peak_to_peak
 
-            // --- 2. Peak Detection Features ---
+            // 2. Fitur Deteksi Peak
             val peakHeightThresholdForNumPeaks = meanVal + 0.1 * stdVal
             val minPeakDistanceForNumPeaks = 10
             val localPeaksIndices = mutableListOf<Int>()
@@ -248,7 +195,7 @@ object ECGFeatureExtractor {
                     }
                 }
             }
-            features[8] = localPeaksIndices.size.toDouble() // num_peaks
+            features[8] = localPeaksIndices.size.toDouble()
 
             var rPeakIdxInSegment = 0
             var rPeakAmplitudeInSegment = beatSegment.firstOrNull() ?: Double.NEGATIVE_INFINITY
@@ -258,20 +205,18 @@ object ECGFeatureExtractor {
                     rPeakIdxInSegment = index
                 }
             }
-            features[9] = rPeakAmplitudeInSegment // r_peak_amplitude
+            features[9] = rPeakAmplitudeInSegment
             features[10] = if (beatSegment.isNotEmpty()) rPeakIdxInSegment.toDouble() / beatSegment.size.toDouble()
-            else 0.0 // r_peak_position (normalized)
+            else 0.0
 
             val qrsWindowHalfContext = 20
             val qrsStartIdx = max(0, rPeakIdxInSegment - qrsWindowHalfContext)
-            // Python min(len(beat), r_peak_idx + 20) untuk slicing eksklusif.
-            // Untuk qrs_duration sebagai jumlah sampel, kita butuh qrs_end_inclusive.
             val qrsEndIdxInclusive = min(beatSegment.size - 1, rPeakIdxInSegment + qrsWindowHalfContext)
             val qrsDurationSamples= (qrsEndIdxInclusive - qrsStartIdx)
-            features[11] = qrsDurationSamples.toDouble() // qrs_duration (jumlah sampel, fitur ke-4 dari "Peak features" di Python)
+            features[11] = qrsDurationSamples.toDouble() // qrs_duration (jumlah sampel, fitur ke-4 dari "fitur peak" di python)
 
-            // --- 3. QRS Complex Features ---
-            features[12] = (qrsDurationSamples.toDouble() / fs) * 1000.0 // qrs_width (dalam ms)
+            // 3. Fitur QRS Complex
+            features[12] = (qrsDurationSamples.toDouble() / fs) * 1000.0
 
             var qrsArea = 0.0
             if (qrsStartIdx <= qrsEndIdxInclusive && qrsEndIdxInclusive < beatSegment.size && qrsStartIdx < beatSegment.size -1) {
@@ -281,12 +226,12 @@ object ECGFeatureExtractor {
                         qrsArea += (abs(qrsRegion[k]) + abs(qrsRegion[k + 1])) / 2.0
                     }
                 } else if (qrsRegion.size == 1) {
-                    qrsArea = abs(qrsRegion[0]) // Jika hanya 1 titik, area = nilai absolutnya (dx=1)
+                    qrsArea = abs(qrsRegion[0])
                 }
             }
-            features[13] = qrsArea // qrs_area
+            features[13] = qrsArea
 
-            // --- 4. P and T wave features ---
+            // 4. Fitur Gelombang P dan T
             val oneThirdLen = beatSegment.size / 3
             if (oneThirdLen > 0) {
                 val pWaveRegion = beatSegment.subList(0, oneThirdLen)
@@ -313,35 +258,29 @@ object ECGFeatureExtractor {
             }
 
 
-            // --- 5. Slope and Gradient Features (4 fitur) ---
-            // Python: beat_diff = np.diff(beat)
+            // 5. Fitur Slope dan Gradient (4 fitur)
             if (beatSegment.size >= 2) {
                 val beatDiff = DoubleArray(beatSegment.size - 1) { beatSegment[it + 1] - beatSegment[it] }
                 if (beatDiff.isNotEmpty()) {
                     features[20] = beatDiff.maxOrNull() ?: 0.0 // max_positive_slope
                     features[21] = beatDiff.minOrNull() ?: 0.0 // max_negative_slope
                     val meanSlope = beatDiff.average()
-                    features[22] = meanSlope // mean_slope
+                    features[22] = meanSlope
                     features[23] = beatDiff.map { val diff = it - meanSlope; diff * diff }.average() // slope_variance
                 }
             }
 
-            // --- 6. Interval Features (2 fitur) ---
-            // Python: pre_r_interval = r_peak_idx (indeks R-peak di dalam segmen)
-            //         post_r_interval = len(beat) - r_peak_idx
+            // 6. Fitur Interval (2 fitur)
             features[24] = rPeakIdxInSegment.toDouble() // pre_r_interval
             features[25] = (beatSegment.size - rPeakIdxInSegment).toDouble() // Jumlah sampel dari R-peak (inklusif) sampai akhir
 
-            // --- 7. Energy Features (3 fitur) ---
-            // Python: signal_energy = np.sum(beat**2)
-            //         normalized_energy = signal_energy / len(beat)
-            //         rms = np.sqrt(np.mean(beat**2))
+            // 7. Fitur Energi (3 fitur)
             val squaredBeatForEnergy = beatSegment.map { it * it }
             features[26] = squaredBeatForEnergy.sum() // signal_energy
             features[27] = if (beatSegment.isNotEmpty()) features[26] / beatSegment.size else 0.0 // normalized_energy
             features[28] = if (beatSegment.isNotEmpty()) sqrt(squaredBeatForEnergy.average()) else 0.0 // rms
 
-            // --- 8. Other features (Sisa 8 fitur dari Python) ---
+            // 8. Fitur2 Lain (Sisa 8 fitur lain dari Python)
             //    Urutan Python: zero_crossings, qrs_p_ratio, qrs_t_ratio, beat_variability,
             //                   symmetry_correlation, time_to_peak, upstroke_area, downstroke_area
 
@@ -350,8 +289,8 @@ object ECGFeatureExtractor {
             if (beatSegment.size >= 2) {
                 for (k in 0 until beatSegment.size - 1) {
                     if ((beatSegment[k] >= 0 && beatSegment[k+1] < 0) || (beatSegment[k] < 0 && beatSegment[k+1] >= 0)) {
-                        if (beatSegment[k] != 0.0 || beatSegment[k+1] != 0.0) zeroCrossingsCount++ // Hitung hanya jika bukan dari 0 ke 0
-                    }
+                        if (beatSegment[k] != 0.0 || beatSegment[k+1] != 0.0) zeroCrossingsCount++
+                        }
                 }
             }
             features[29] = zeroCrossingsCount.toDouble()
@@ -423,20 +362,5 @@ object ECGFeatureExtractor {
             return DoubleArray(numFeatures) { 0.0 } // Kembalikan array nol jika ada error
         }
         return features
-    }
-
-    // --- Fungsi calculateRRIntervals dan calculateHeartRates TETAP SAMA ---
-    fun calculateRRIntervals(rPeakIndices: List<Int>, fs: Double): List<Double> {
-        val rrIntervalsMs = mutableListOf<Double>()
-        if (rPeakIndices.size < 2 || fs <= 0) return rrIntervalsMs
-        for (i in 0 until rPeakIndices.size - 1) {
-            val intervalSamples = rPeakIndices[i + 1] - rPeakIndices[i]
-            if (intervalSamples <= 0) { Log.w(TAG, "Invalid interval: $intervalSamples"); continue }
-            rrIntervalsMs.add((intervalSamples.toDouble() / fs) * 1000.0)
-        }
-        return rrIntervalsMs
-    }
-    fun calculateHeartRates(rrIntervalsMs: List<Double>): List<Double> {
-        return rrIntervalsMs.mapNotNull { if (it > 0) 60000.0 / it else null }
     }
 }
