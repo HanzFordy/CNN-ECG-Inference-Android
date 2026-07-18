@@ -29,6 +29,10 @@ class EcgGraphActivity : AppCompatActivity() {
     private lateinit var ecgChart: LineChart
     private lateinit var progressBar: ProgressBar
 
+    private lateinit var tvLatencyStats: TextView
+    private lateinit var tvMemoryStats: TextView
+    private lateinit var tvCpuStats: TextView
+
     private lateinit var api: PolarBleApi
     private var deviceId: String? = null
     private val MAX_VISIBLE_ENTRIES = 400
@@ -58,6 +62,11 @@ class EcgGraphActivity : AppCompatActivity() {
         ecgChart = findViewById(R.id.ecg_chart)
         ecgDataText = findViewById(R.id.ecg_data_text)
         progressBar = findViewById(R.id.buffering_progress_bar)
+
+        tvLatencyStats = findViewById(R.id.tv_latency_stats)
+        tvMemoryStats = findViewById(R.id.tv_memory_stats)
+        tvCpuStats = findViewById(R.id.tv_cpu_stats)
+
         setupChart()
         deviceId = intent.getStringExtra("DEVICE_ID")
         if (deviceId == null) {
@@ -151,6 +160,10 @@ class EcgGraphActivity : AppCompatActivity() {
                         ecgDataText.text = state.summaryText
                         progressBar.visibility = View.GONE
                         ecgChart.visibility = View.VISIBLE
+
+                        tvLatencyStats.text = state.latencyInfo
+                        tvMemoryStats.text = state.memoryInfo
+                        tvCpuStats.text = state.cpuInfo
                     }
                     is ECGUIState.Error -> {
                         ecgDataText.text = "Error: ${state.message}"

@@ -10,7 +10,10 @@ sealed class ECGUIState {
     data class Streaming(
         val summaryText: String,
         val ecgDataPoints: List<Entry>? = null,
-        val markers: List<ClassificationMarker>? = null
+        val markers: List<ClassificationMarker>? = null,
+        val latencyInfo: String = "",
+        val memoryInfo: String = "",
+        val cpuInfo: String = ""
     ) : ECGUIState()
 
     data class ClassificationMarker(

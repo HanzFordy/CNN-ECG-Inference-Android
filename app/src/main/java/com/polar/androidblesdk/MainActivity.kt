@@ -44,6 +44,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        val permissions = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        requestPermissions(permissions, 1)
+
         connectButton = findViewById(R.id.connect_button)
         connectButton.text = "Tidak tersambung ke sensor apapun"
         connectButton.isEnabled = false
@@ -129,7 +136,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }, 10000) // 10 detik
 
-            api.autoConnectToDevice(-60, "180D", null)
+            api.autoConnectToDevice(-100, "180D", null)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(
                     {

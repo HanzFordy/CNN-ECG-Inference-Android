@@ -154,12 +154,6 @@ class ECGViewModel(application: Application) : AndroidViewModel(application) {
                             repeat(WINDOW_SLIDE_STEP) { if (processingBuffer.isNotEmpty()) processingBuffer.removeFirst() }
                         }
 
-                        // Update UI Teks (Counter)
-                        withContext(Dispatchers.Main) {
-                            val summary = classificationCounts.entries.joinToString(" | ") { "${it.key}: ${it.value}" }
-                            // Kita pakai state Streaming tapi tanpa dataPoints/markers (karena dikirim lewat Flow terpisah)
-                            _uiState.value = ECGUIState.Streaming(summary, null, null)
-                        }
                     }
                 }
                 .catch { e ->
@@ -204,6 +198,23 @@ class ECGViewModel(application: Application) : AndroidViewModel(application) {
                     )
 
                     Log.d("PERFORMANCE_LOG", "Data: Latency=$latencyPerBeat ms, CPU=$cpuPercent %")
+
+                    val allLatencies = performanceLogs.map { it.inferenceTimeMs }
+                    val allMemories = performanceLogs.map { it.memoryUsageKb.toDouble() / 1024.0 }
+                    val allCpus = performanceLogs.map { it.cpuUsagePercent }
+                    val latInfo = "Rata²: ${String.format("%.2f", allLatencies.average())} | Min: ${allLatencies.minOrNull()} | Maks: ${allLatencies.maxOrNull()} (ms)"
+                    val memInfo = "RAM Usage (MB):\nRata²: ${String.format("%.2f", allMemories.average())} | Min: ${String.format("%.2f", allMemories.minOrNull())} | Maks: ${String.format("%.2f", allMemories.maxOrNull())}"
+                    val cpuInfo = "CPU Usage (%):\nRata²: ${String.format("%.2f", allCpus.average())} | Min: ${String.format("%.2f", allCpus.minOrNull())} | Maks: ${String.format("%.2f", allCpus.maxOrNull())}"
+
+                    val summary = classificationCounts.entries.joinToString(" | ") { "${it.key}: ${it.value}" }
+                    viewModelScope.launch(Dispatchers.Main) {
+                        _uiState.value = ECGUIState.Streaming(
+                            summaryText = summary,
+                            latencyInfo = latInfo,
+                            memoryInfo = memInfo,
+                            cpuInfo = cpuInfo
+                        )
+                    }
 
                     val className = ecgClassifier!!.classNames.getOrElse(predictedIndex) { "?" }
 
